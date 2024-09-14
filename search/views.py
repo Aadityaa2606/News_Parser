@@ -1,16 +1,9 @@
-from search.tasks import hello_world, search_task
-from django.shortcuts import render
+from search.tasks import search_task
 from django.http import HttpResponse, JsonResponse
-from doc_retrival.celery import app
 
 
 def index(request):
     return JsonResponse({"status": "OK"})
-
-
-def test_celery(request):
-    hello_world.delay()  # Call the task asynchronously
-    return HttpResponse("Task has been triggered!")
 
 
 def handle_scrapping(request):

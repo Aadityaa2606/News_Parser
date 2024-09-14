@@ -1,12 +1,6 @@
 from celery import shared_task
 from search.utils import scrape_and_push_to_db
 
-
-@shared_task
-def hello_world():
-    print("Hello, World!")
-
-
 @shared_task
 def search_task(query):
     search_queries = [
