@@ -16,7 +16,6 @@ def test_celery(request):
 def handle_scrapping(request):
     query = request.GET.get("query")
     task1 = search_task.delay(query)
-
     return JsonResponse({"task_id": task1.id})
 
 
