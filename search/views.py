@@ -4,10 +4,16 @@ from search.utils import retrieve_from_chromadb
 from datetime import timedelta
 from search.models import UserAPIRequest
 from django.utils.timezone import now
-import time
+from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger('django')
 
 
 def index(request):
+    # Start time for inference
+    start_time = datetime.now()
+
     user_id = request.GET.get("user_id")
     if not user_id:
         return JsonResponse({"error": "user_id is required"}, status=400)
@@ -47,9 +53,19 @@ def index(request):
     threshold = request.GET.get("threshold")
     threshold = float(threshold) if threshold else None
 
-    results = retrieve_from_chromadb(query=query, top_k=top_k, threshold=threshold)
+    results = retrieve_from_chromadb(
+        query=query, top_k=top_k, threshold=threshold)
 
-    return JsonResponse(results)
+    # Calculate inference time
+    inference_time = (datetime.now() - start_time).total_seconds()
+
+    # Log the request and inference time
+    logger.info(f'User ID: {user_id}, Query: {query}, Top_k: {top_k}, Threshold: {threshold}, Inference Time: {inference_time}s')
+
+    # Add inference time to the response
+    response = JsonResponse(results)
+    response['X-Inference-Time'] = inference_time
+    return response
 
 def check_task_status(request, task_id):
     result = search_task.AsyncResult(task_id, app=search_task.backend)

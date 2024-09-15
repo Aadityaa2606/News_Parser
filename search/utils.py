@@ -106,8 +106,7 @@ def retrieve_from_chromadb(query: str, top_k: int = 10, threshold: float = None)
 
     if cached_result:
         cache_time_left = cache_ttl(cache_key)
-        print(f"Using cached result. Cache expires in {
-              cache_time_left} seconds.")
+        print(f"Using cached result. Cache expires in {cache_time_left} seconds.")
         results = json.loads(cached_result)
     else:
         # Perform actual retrieval from ChromaDB
@@ -118,8 +117,6 @@ def retrieve_from_chromadb(query: str, top_k: int = 10, threshold: float = None)
             results = collection.query(
                 query_texts=[query],
                 include=['distances', 'metadatas', 'documents'],
-                # Fetch top_k results (but this will be filtered later)
-                n_results=top_k
             )
             # Cache the full result with a 5-minute timeout (300 seconds)
             print("Caching results...")
