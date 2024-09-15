@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  chromadb:
+    image: python:3.10
+    container_name: chromadb
+    command: chroma run --path ./docrepo
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./docrepo:/app/docrepo
+    working_dir: /app
+
+  django:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: django
+    command: python manage.py runserver 0.0.0.0:9000
+    ports:
+      - "9000:9000"
+    depends_on:
+      - redis
+      - chromadb
+    environment:
+      - DJANGO_SETTINGS_MODULE=document_retrieval.settings
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - .:/app
+    working_dir: /app
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: celery
+    command: celery -A document_retrieval worker --loglevel=info
+    depends_on:
+      - redis
+      - django
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    working_dir: /app
+
+volumes:
+  redis_data:
