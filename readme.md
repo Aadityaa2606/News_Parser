@@ -115,29 +115,41 @@ A django backend for a document retrieval system. The system is designed to retr
     cd document-retrieval
     ```
 2. Create a virtual environment:
-3. Install the dependencies:
    ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the Django migrations:
-   ```bash
-    python manage.py migrate
+    python -m venv venv
+    source venv/bin/activate
     ```
-5. Start the Django development server:
-6. Run the Celery worker:
-   ```bash
-   celery -A document_retrieval worker --loglevel=info
-   ```
-7. Run cromaDB server:
-   ```bash
-    chroma run --path ./docrepo
-    ```
-8. Start the Redis server:
-9. Run the Django development server:
-   ```bash
-    python manage.py runserver 9000
-    ```
-10. The API will be available at `http://localhost:9000`.
+- ### Using Docker
+   - Run the following command to build the Docker containers:
+     ```bash
+     docker-compose up --build
+     ```
+- ### Without Docker 
+  1. Install the dependencies:
+     ```bash
+     pip install -r requirements.txt
+     ```
+  2. Run the Django migrations:
+     ```bash
+      python manage.py migrate
+      ```
+  3. Run the Celery worker:
+     ```bash
+     celery -A document_retrieval worker --loglevel=info
+     ```
+  4. Run cromaDB server:
+     ```bash
+      chroma run --path ./docrepo
+      ```
+  5. Start the Redis server:
+     ```bash
+     docker run -d -p 6379:6379 redis
+     ```
+  6. Run the Django development server:
+     ```bash
+      python manage.py runserver 9000
+      ```
+The API will be available at `http://localhost:9000`.
 
 ## Usage
 
