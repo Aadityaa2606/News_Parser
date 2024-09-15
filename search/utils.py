@@ -2,24 +2,22 @@ import feedparser
 import json
 import requests
 from newspaper import Article
-from chromadb import Client, Collection
 import chromadb
 from googlesearch import search
+from urllib.parse import quote_plus
+from search.cache import cache_get, cache_set, cache_ttl
+from time import sleep
+
 
 def fetch_rss_feed(query):
     """Fetch the RSS feed from Google News based on the search query."""
-    rss_url = f'https://news.google.com/rss/search?q={query}'
+    encoded_query = ''
+    for words in query.split(' '):
+        encoded_query += words + '+'
+    encoded_query = encoded_query[:-1]
+    rss_url = f'https://news.google.com/rss/search?q={encoded_query}'
     feed = feedparser.parse(rss_url)
     return feed
-
-
-def fetch_redirect_url(url):
-    """Fetch the final URL after initial content redirection using request history."""
-    response = requests.get(url)
-    redirects = [url]
-    for resp in response.history:
-        redirects.append(resp.headers.get('Location'))
-    return response.url
 
 
 def fetch_url(query: str):
@@ -27,20 +25,22 @@ def fetch_url(query: str):
         return j
 
 
-def parse_article_content(entry: feedparser.FeedParserDict):
+def parse_article_content(entry):
     """Parse the article content from the given link using Newspaper3k."""
     try:
         # Follow redirects to get the final URL
         final_url = fetch_url(entry.title)
-
+        sleep(2)
+        # final_url = fetch_final_url(entry.link)
         # Use Newspaper3k to extract the article content from the final URL
         article = Article(final_url)
         article.download()
         article.parse()
-
         return article.text
     except Exception as e:
-        return f"Error parsing article: {str(e)}"
+        final_url = fetch_url(entry.title)
+        sleep(2)
+        return f"Error parsing article: {str(e)}, {final_url}"
 
 
 def extract_feed_entry_data(entry):
@@ -96,24 +96,59 @@ def scrape_and_push_to_db(query):
         return json.dumps({"message": "Nothing Found!"}, indent=4)
 
 
-def retrieve_from_chromadb(query: str):
-    client = chromadb.HttpClient(host='localhost', port=8000)
-    collection = client.get_collection(name="news_articles")
-    print(collection.count())
+def retrieve_from_chromadb(query: str, top_k: int = 10, threshold: float = None):
+    # Create cache key based on the query (exclude top_k and threshold)
+    cache_key = f'chromadb:{query}'
+    print(f"Cache Key: {cache_key}")
 
-    if collection:
-        results = collection.query(
-            # Query for documents containing the word "Python"
-            query_texts=[query],
-            # Retrieve the content, document and metadata fields
-            include=['distances', 'metadatas', 'documents'],
-            n_results=5
-        )
-        return results
+    # Check if the result is cached
+    cached_result = cache_get(cache_key)
+
+    if cached_result:
+        cache_time_left = cache_ttl(cache_key)
+        print(f"Using cached result. Cache expires in {
+              cache_time_left} seconds.")
+        results = json.loads(cached_result)
     else:
-        return json.dumps({"message": "Collection not found!"}, indent=4)
+        # Perform actual retrieval from ChromaDB
+        client = chromadb.HttpClient(host='localhost', port=8000)
+        collection = client.get_collection(name="news_articles")
+
+        if collection:
+            results = collection.query(
+                query_texts=[query],
+                include=['distances', 'metadatas', 'documents'],
+                # Fetch top_k results (but this will be filtered later)
+                n_results=top_k
+            )
+            # Cache the full result with a 5-minute timeout (300 seconds)
+            print("Caching results...")
+            cache_set(cache_key, json.dumps(results), timeout=300)
+        else:
+            return json.dumps({"message": "Collection not found!"}, indent=4)
+
+    # Filter results based on the threshold and then apply top_k
+    filtered_results = {
+        "ids": [],
+        "distances": [],
+        "metadatas": [],
+        "documents": []
+    }
+
+    for i, distance in enumerate(results['distances'][0]):
+        if threshold is None or distance <= threshold:  # Apply threshold if provided
+            filtered_results['ids'].append(results['ids'][0][i])
+            filtered_results['distances'].append(distance)
+            filtered_results['metadatas'].append(results['metadatas'][0][i])
+            filtered_results['documents'].append(results['documents'][0][i])
+
+        # Stop after top_k valid results are collected
+        if len(filtered_results['ids']) >= top_k:
+            break
+
+    return filtered_results
 
 
-def search(search_queries: list):
+def scrapper(search_queries: list):
     for query in search_queries:
         scrape_and_push_to_db(query)

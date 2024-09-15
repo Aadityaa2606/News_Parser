@@ -1,16 +1,55 @@
 from search.tasks import search_task
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
+from search.utils import retrieve_from_chromadb
+from datetime import timedelta
+from search.models import UserAPIRequest
+from django.utils.timezone import now
+import time
 
 
 def index(request):
-    return JsonResponse({"status": "OK"})
+    user_id = request.GET.get("user_id")
+    if not user_id:
+        return JsonResponse({"error": "user_id is required"}, status=400)
 
+    # Ensure user_id is an integer
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return JsonResponse({"error": "user_id must be an integer"}, status=400)
 
-def handle_scrapping(request):
-    query = request.GET.get("query")
-    task1 = search_task.delay(query)
-    return JsonResponse({"task_id": task1.id})
+    # Check the request limit
+    limit = 5
+    time_limit = timedelta(minutes=5)  # 5-minute window
 
+    # Get or create the user entry
+    user_entry, created = UserAPIRequest.objects.get_or_create(user_id=user_id)
+
+    if not created:
+        # Check if the user exceeded the request limit
+        if (now() - user_entry.last_request_time) < time_limit:
+            if user_entry.request_count >= limit:
+                return HttpResponseForbidden("Too many requests. Try again later.", status=429)
+            else:
+                user_entry.request_count += 1
+                user_entry.save()
+        else:
+            # Reset count after the time limit
+            user_entry.request_count = 1
+            user_entry.save()
+    else:
+        # New user entry
+        user_entry.request_count = 1
+        user_entry.save()
+
+    query = request.GET.get("text", "business")
+    top_k = int(request.GET.get("top_k", 10))
+    threshold = request.GET.get("threshold")
+    threshold = float(threshold) if threshold else None
+
+    results = retrieve_from_chromadb(query=query, top_k=top_k, threshold=threshold)
+
+    return JsonResponse(results)
 
 def check_task_status(request, task_id):
     result = search_task.AsyncResult(task_id, app=search_task.backend)

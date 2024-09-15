@@ -136,3 +136,8 @@ GitHub.sublime-settings
 !.vscode/launch.json 
 !.vscode/extensions.json 
 .history
+
+
+/docrepo
+db.sqlite3
+/docrepo/chroma.sqlite3
