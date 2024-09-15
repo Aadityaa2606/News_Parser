@@ -138,6 +138,5 @@ GitHub.sublime-settings
 .history
 
 
-/docrepo
-db.sqlite3
-/docrepo/chroma.sqlite3
+*.sqlite3
+docrepo/
